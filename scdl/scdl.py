@@ -74,8 +74,9 @@ import math
 import mimetypes
 
 mimetypes.init()
-
+from com.arthenica.mobileffmpeg import FFmpeg
 import os
+from android.os import Environment
 import pathlib
 import shutil
 import subprocess
@@ -125,11 +126,6 @@ def main():
     """
     Main function, parses the URL from command line arguments
     """
-
-    # exit if ffmpeg not installed
-    if not is_ffmpeg_available():
-        logger.error("ffmpeg is not installed")
-        sys.exit(1)
 
     # Parse arguments
     arguments = docopt(__doc__, version=__version__)
@@ -537,9 +533,10 @@ def get_filename(track: BasicTrack, original_filename=None, aac=False, playlist_
     if original_filename is not None:
         original_filename = original_filename.encode("utf-8", "ignore").decode("utf-8")
         ext = os.path.splitext(original_filename)[1]
+    filename = limit_filename_length(title, ext)
+    filename = sanitize_filename(filename)
     filename = sanitize_str(title + ext)
     return filename
-
 
 def download_original_file(client: SoundCloud, track: BasicTrack, title: str, playlist_info=None, **kwargs):
     logger.info("Downloading the original file.")
@@ -620,9 +617,11 @@ def download_original_file(client: SoundCloud, track: BasicTrack, title: str, pl
         logger.info("Converting to .flac...")
         newfilename = limit_filename_length(filename[:-4], ".flac")
 
-        commands = ["ffmpeg", "-i", filename, newfilename, "-loglevel", "error"]
-        logger.debug(f"Commands: {commands}")
-        subprocess.call(commands)
+        command = f'-i {filename} {newfilename} -loglevel error'
+
+        FFmpeg.execute(command]
+        logger.debug(f"Commands: {command}")
+        
         os.remove(filename)
         filename = newfilename
 
@@ -685,17 +684,19 @@ def download_hls(client: SoundCloud, track: BasicTrack, title: str, playlist_inf
     # Get the requests stream
     url = get_transcoding_m3u8(client, transcoding, **kwargs)
     filename_path = os.path.abspath(filename)
+    
+    # Construct the FFmpeg command
+    command = f'-i "{url}" -c copy "{filename_path}" -loglevel error'
 
-    p = subprocess.Popen(
-        ["ffmpeg", "-i", url, "-c", "copy", filename_path, "-loglevel", "error"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    stdout, stderr = p.communicate()
-    if stderr:
-        logger.error(stderr.decode("utf-8"))
-    return (filename, False)
+    # Execute the FFmpeg command
+    return_code = FFmpeg.execute(command)
 
+    # Check for errors
+    if return_code != 0:
+        logger.error("FFmpeg encountered an error")
+        return (filename_path, False)
+    
+    return (filename_path, True)
 
 def download_track(client: SoundCloud, track: BasicTrack, playlist_info=None, exit_on_fail=True, **kwargs):
     """
@@ -961,12 +962,6 @@ def limit_filename_length(name: str, ext: str, max_bytes=255):
     while len(name.encode("utf-8")) + len(ext.encode("utf-8")) > max_bytes:
         name = name[:-1]
     return name + ext
-
-def is_ffmpeg_available():
-    """
-    Returns true if ffmpeg is available in the operating system
-    """
-    return shutil.which("ffmpeg") is not None
 
 if __name__ == "__main__":
     main()
