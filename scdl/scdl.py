@@ -632,9 +632,7 @@ def download_original_file(client: SoundCloud, track: BasicTrack, title: str, pl
         logger.info("Converting to .flac...")
         newfilename = limit_filename_length(filename[:-4], ".flac")
 
-        from com.arthenica.ffmpegkit import FFmpegKit
-
-        commands = ["ffmpeg", "-i", filename, newfilename, "-loglevel", "error"]
+        commands = ["-i", filename, newfilename, "-loglevel", "error"]
         session = FFmpegKit.execute(' '.join(commands))
         logger.debug(f"Commands: {commands}")
         if session.getReturnCode() != 0:
@@ -703,7 +701,7 @@ def download_hls(client: SoundCloud, track: BasicTrack, title: str, playlist_inf
     url = get_transcoding_m3u8(client, transcoding, **kwargs)
     filename_path = os.path.abspath(filename)
     
-    commands = ["ffmpeg", "-i", url, "-c", "copy", filename_path, "-loglevel", "error"]
+    commands = ["-i", url, "-c", "copy", filename_path, "-loglevel", "error"]
         session = FFmpegKit.execute(' '.join(commands))
     if session.getReturnCode() != 0:
         logger.error(f"FFmpeg command failed: {session.getOutput()}")
