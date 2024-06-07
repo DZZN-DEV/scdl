@@ -130,7 +130,7 @@ def main():
     # exit if ffmpeg not installed
     if not is_ffmpeg_available():
         logger.error("ffmpeg is not installed")
-        sys.exit(1)
+    # sys.exit(1)
 
     # Parse arguments
     arguments = docopt(__doc__, version=__version__)
