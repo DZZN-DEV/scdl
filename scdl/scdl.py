@@ -100,7 +100,7 @@ from pathvalidate import sanitize_filename
 from soundcloud import (BasicAlbumPlaylist, BasicTrack, MiniTrack, SoundCloud,
                         Transcoding)
 
-from scdl import "v2.7.9", utils
+from scdl import __version__, utils
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logging.getLogger("requests").setLevel(logging.WARNING)
