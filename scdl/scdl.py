@@ -74,9 +74,9 @@ import math
 import mimetypes
 
 mimetypes.init()
-from com.arthenica.mobileffmpeg import FFmpeg
+
 import os
-from android.os import Environment
+from com.arthenica.ffmpegkit import FFmpegKit
 import pathlib
 import shutil
 import subprocess
@@ -100,7 +100,7 @@ from pathvalidate import sanitize_filename
 from soundcloud import (BasicAlbumPlaylist, BasicTrack, MiniTrack, SoundCloud,
                         Transcoding)
 
-from scdl import __version__, utils
+from scdl import "v2.7.9", utils
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logging.getLogger("requests").setLevel(logging.WARNING)
@@ -126,6 +126,11 @@ def main():
     """
     Main function, parses the URL from command line arguments
     """
+
+    # exit if ffmpeg not installed
+    if not is_ffmpeg_available():
+        logger.error("ffmpeg is not installed")
+        sys.exit(1)
 
     # Parse arguments
     arguments = docopt(__doc__, version=__version__)
@@ -529,14 +534,24 @@ def get_filename(track: BasicTrack, original_filename=None, aac=False, playlist_
         else:
             title = kwargs.get("name_format").format(**asdict(track), timestamp=timestamp)
 
-    ext = ".m4a" if aac else ".mp3"  # contain aac in m4a to write metadata
+    ext = ".mp3"
+
+    if aac:
+        ext = ".m4a"
+
+    filename = f"{username} - {title}{ext}"
+    filename = limit_filename_length(filename, ext)
     if original_filename is not None:
         original_filename = original_filename.encode("utf-8", "ignore").decode("utf-8")
         ext = os.path.splitext(original_filename)[1]
-    filename = limit_filename_length(title, ext)
-    filename = sanitize_filename(filename)
+    
+
+    filename = f"{username} - {title}{ext}"
+    filename = limit_filename_length(filename, ext)    
+    
     filename = sanitize_str(title + ext)
     return filename
+
 
 def download_original_file(client: SoundCloud, track: BasicTrack, title: str, playlist_info=None, **kwargs):
     logger.info("Downloading the original file.")
@@ -617,10 +632,13 @@ def download_original_file(client: SoundCloud, track: BasicTrack, title: str, pl
         logger.info("Converting to .flac...")
         newfilename = limit_filename_length(filename[:-4], ".flac")
 
-        command = f'-i {filename} {newfilename} -loglevel error'
+        from com.arthenica.ffmpegkit import FFmpegKit
 
-        FFmpeg.execute(command]
-        logger.debug(f"Commands: {command}")
+        commands = ["ffmpeg", "-i", filename, newfilename, "-loglevel", "error"]
+        session = FFmpegKit.execute(' '.join(commands))
+        logger.debug(f"Commands: {commands}")
+        if session.getReturnCode() != 0:
+            logger.error(f"FFmpeg command failed: {session.getOutput()}")
         
         os.remove(filename)
         filename = newfilename
@@ -685,18 +703,13 @@ def download_hls(client: SoundCloud, track: BasicTrack, title: str, playlist_inf
     url = get_transcoding_m3u8(client, transcoding, **kwargs)
     filename_path = os.path.abspath(filename)
     
-    # Construct the FFmpeg command
-    command = f'-i "{url}" -c copy "{filename_path}" -loglevel error'
+    commands = ["ffmpeg", "-i", url, "-c", "copy", filename_path, "-loglevel", "error"]
+        session = FFmpegKit.execute(' '.join(commands))
+    if session.getReturnCode() != 0:
+        logger.error(f"FFmpeg command failed: {session.getOutput()}")
+        
+    return (filename, False)
 
-    # Execute the FFmpeg command
-    return_code = FFmpeg.execute(command)
-
-    # Check for errors
-    if return_code != 0:
-        logger.error("FFmpeg encountered an error")
-        return (filename_path, False)
-    
-    return (filename_path, True)
 
 def download_track(client: SoundCloud, track: BasicTrack, playlist_info=None, exit_on_fail=True, **kwargs):
     """
@@ -962,6 +975,15 @@ def limit_filename_length(name: str, ext: str, max_bytes=255):
     while len(name.encode("utf-8")) + len(ext.encode("utf-8")) > max_bytes:
         name = name[:-1]
     return name + ext
+
+def is_ffmpeg_available():
+    """Returns true if ffmpeg is available via FFmpegKit"""
+    try:
+        session = FFmpegKit.execute("-version")
+        return session.getReturnCode() == 0
+    except Exception as e:
+        logger.error(f"FFmpegKit error: {e}")
+        return False
 
 if __name__ == "__main__":
     main()
